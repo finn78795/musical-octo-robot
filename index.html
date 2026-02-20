@@ -1,30 +1,45 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Openfront Console</title>
-    <script>
-        // Register the "Ghost" Service Worker
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('./sw.js').then(() => {
-                console.log("Service Worker Active: Bypassing White Screen...");
-            });
-        }
-
-        function launch() {
-            const frame = document.getElementById('viewer');
-            const target = "https://openfront.io/";
-            // We use a base-tag injection to help the JS find its files
-            frame.srcdoc = `<html><head><base href="${target}"></head><body><script>location.href="${target}"<\/script></body></html>`;
-        }
-    </script>
+    <title>System Console</title>
     <style>
-        body { margin: 0; background: #000; display: flex; flex-direction: column; height: 100vh; }
-        button { padding: 15px; background: #2563eb; color: #fff; border: none; font-weight: bold; cursor: pointer; }
-        iframe { flex: 1; border: none; background: #fff; }
+        body { margin: 0; background: #000; font-family: sans-serif; height: 100vh; display: flex; flex-direction: column; color: white; }
+        #nav { padding: 15px; background: #111; display: flex; gap: 10px; }
+        input { flex: 1; padding: 10px; border-radius: 5px; border: 1px solid #444; background: #222; color: #fff; }
+        button { padding: 10px 20px; background: #3b82f6; border: none; color: white; border-radius: 5px; cursor: pointer; }
+        iframe { flex: 1; border: none; background: white; }
     </style>
 </head>
 <body>
-    <button onclick="launch()">Initialize Openfront</button>
-    <iframe id="viewer"></iframe>
+    <div id="nav">
+        <input type="text" id="target" value="https://openfront.io/">
+        <button onclick="run()">Tunnel</button>
+    </div>
+    <iframe id="engine"></iframe>
+
+    <script>
+        async function run() {
+            const url = document.getElementById('target').value;
+            const frame = document.getElementById('engine');
+            
+            // This bridge is currently the least likely to trigger a 403
+            const proxy = "https://api.allorigins.win/get?url=";
+            
+            try {
+                const resp = await fetch(proxy + encodeURIComponent(url));
+                const data = await resp.json();
+                let html = data.contents;
+
+                // Create a 'Blob' to prevent the 403 security block
+                const blob = new Blob([
+                    `<html><head><base href="${url}"></head><body>${html}</body></html>`
+                ], { type: 'text/html' });
+
+                frame.src = URL.createObjectURL(blob);
+            } catch (e) {
+                alert("Tunnel Blocked: Try using a different iPad browser.");
+            }
+        }
+    </script>
 </body>
 </html>
