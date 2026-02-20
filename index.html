@@ -3,63 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Workstation Console</title>
+    <title>Console</title>
     <style>
-        body { margin: 0; padding: 0; height: 100vh; display: flex; flex-direction: column; background: #000; font-family: system-ui, -apple-system, sans-serif; }
-        #bar { background: #1a1a1a; padding: 8px; display: flex; gap: 8px; border-bottom: 1px solid #333; z-index: 9999; }
-        input { flex: 1; padding: 10px; border-radius: 6px; border: 1px solid #444; background: #2a2a2a; color: #fff; outline: none; }
-        button { padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; }
-        button:hover { background: #2563eb; }
-        #frame-container { flex: 1; position: relative; background: #fff; }
-        iframe { width: 100%; height: 100%; border: none; }
-        .hidden { display: none; }
+        body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #000; }
+        #top-bar { height: 50px; background: #1a1a1a; display: flex; align-items: center; padding: 0 15px; border-bottom: 1px solid #333; }
+        #url-input { flex: 1; padding: 8px; border-radius: 4px; border: 1px solid #444; background: #222; color: #fff; margin-right: 10px; }
+        button { padding: 8px 15px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        #content-frame { width: 100%; height: calc(100% - 50px); border: none; background: white; }
     </style>
 </head>
 <body>
-    <div id="bar">
-        <button onclick="goBack()">⬅</button>
-        <input type="text" id="urlInput" placeholder="Enter URL (e.g. wikipedia.org)" onkeydown="if(event.key==='Enter') load()">
-        <button onclick="load()">Browse</button>
+    <div id="top-bar">
+        <input type="text" id="url-input" value="https://openfront.io/">
+        <button onclick="browse()">Launch</button>
     </div>
-    <div id="frame-container">
-        <iframe id="viewer" name="viewer"></iframe>
-    </div>
+    <div id="display-area" style="height: calc(100% - 50px); width: 100%; overflow: auto; background: white;">
+        </div>
 
     <script>
-        // THE ENGINE: Uses Google's Gadget Proxy to bypass CORS and Header blocks
-        const proxyBase = "https://images1-focus-opensocial.googleusercontent.com/gadgets/proxy?container=focus&refresh=604800&url=";
-
-        function load() {
-            let url = document.getElementById('urlInput').value;
-            if (!url) return;
-            if (!url.startsWith('http')) url = 'https://' + url;
-
-            // Encapsulating the URL to prevent the browser from "escaping" the proxy
-            const finalUrl = proxyBase + encodeURIComponent(url);
-            document.getElementById('viewer').src = finalUrl;
-        }
-
-        function goBack() {
-            window.frames['viewer'].history.back();
-        }
-
-        // Feature: Auto-fix links inside the proxy every 2 seconds
-        setInterval(() => {
-            const frame = document.getElementById('viewer');
+        async function browse() {
+            const target = document.getElementById('url-input').value;
+            const display = document.getElementById('display-area');
+            
+            // Using a public CORS bridge to fetch the raw data
+            const bridge = "https://api.allorigins.win/raw?url=";
+            
             try {
-                const frameDoc = frame.contentDocument || frame.contentWindow.document;
-                const links = frameDoc.getElementsByTagName('a');
-                for (let a of links) {
-                    if (a.href && !a.href.includes('googleusercontent')) {
-                        a.href = proxyBase + encodeURIComponent(a.href);
-                        a.target = "_self";
-                    }
+                const response = await fetch(bridge + encodeURIComponent(target));
+                let html = await response.text();
+                
+                // PRE-FIX: This injects a base tag so Openfront's scripts load from its real server
+                // This prevents the "404" errors for JS and CSS files
+                const baseTag = `<base href="${target}">`;
+                
+                if (html.includes('<head>')) {
+                    html = html.replace('<head>', '<head>' + baseTag);
+                } else {
+                    html = baseTag + html;
                 }
-            } catch (e) {
-                // Security policy prevents deep-editing some domains, 
-                // but the Google Proxy handles most of this server-side.
+
+                // Inject the HTML into our display area
+                display.innerHTML = html;
+
+                // Re-execute scripts (since innerHTML doesn't run <script> tags)
+                Array.from(display.querySelectorAll("script")).forEach( oldScript => {
+                    const newScript = document.createElement("script");
+                    Array.from(oldScript.attributes).forEach( attr => newScript.setAttribute(attr.name, attr.value) );
+                    newScript.appendChild(document.createTextNode(oldScript.innerHTML));
+                    oldScript.parentNode.replaceChild(newScript, oldScript);
+                });
+            } catch (err) {
+                display.innerHTML = "<p style='color:red; padding: 20px;'>Error: " + err.message + "</p>";
             }
-        }, 2000);
+        }
     </script>
 </body>
 </html>
