@@ -3,57 +3,75 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Console</title>
+    <title>Openfront Gateway</title>
     <style>
-        body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #000; }
-        #top-bar { height: 50px; background: #1a1a1a; display: flex; align-items: center; padding: 0 15px; border-bottom: 1px solid #333; }
-        #url-input { flex: 1; padding: 8px; border-radius: 4px; border: 1px solid #444; background: #222; color: #fff; margin-right: 10px; }
-        button { padding: 8px 15px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
-        #content-frame { width: 100%; height: calc(100% - 50px); border: none; background: white; }
+        body { margin: 0; background: #000; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; color: #fff; }
+        #nav { padding: 10px; background: #111; display: flex; gap: 10px; border-bottom: 2px solid #333; }
+        input { flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #444; background: #222; color: #fff; outline: none; }
+        button { padding: 10px 20px; background: #2563eb; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        #status { font-size: 12px; color: #888; padding: 5px 15px; }
+        #view-container { flex: 1; position: relative; background: #fff; overflow: auto; }
+        #error-log { color: #ff4d4d; padding: 20px; display: none; }
     </style>
 </head>
 <body>
-    <div id="top-bar">
-        <input type="text" id="url-input" value="https://openfront.io/">
-        <button onclick="browse()">Launch</button>
+    <div id="nav">
+        <input type="text" id="targetUrl" value="https://openfront.io/">
+        <button onclick="launch()">Launch</button>
     </div>
-    <div id="display-area" style="height: calc(100% - 50px); width: 100%; overflow: auto; background: white;">
-        </div>
+    <div id="status">Ready</div>
+    <div id="view-container">
+        <div id="error-log"></div>
+        <div id="view-surface"></div>
+    </div>
 
     <script>
-        async function browse() {
-            const target = document.getElementById('url-input').value;
-            const display = document.getElementById('display-area');
+        async function launch() {
+            const input = document.getElementById('targetUrl').value;
+            const log = document.getElementById('error-log');
+            const surface = document.getElementById('view-surface');
+            const status = document.getElementById('status');
             
-            // Using a public CORS bridge to fetch the raw data
-            const bridge = "https://api.allorigins.win/raw?url=";
-            
+            status.innerText = "Connecting...";
+            log.style.display = "none";
+            surface.innerHTML = "";
+
+            // Alternate Bridges: If one fails, you can swap it here.
+            // 1. https://corsproxy.io/?
+            // 2. https://api.codetabs.com/v1/proxy?quest=
+            const bridge = "https://corsproxy.io/?";
+            const proxyUrl = bridge + encodeURIComponent(input);
+
             try {
-                const response = await fetch(bridge + encodeURIComponent(target));
+                const response = await fetch(proxyUrl);
+                
+                if (!response.ok) throw new Error(`Bridge Error: ${response.status}`);
+                
                 let html = await response.text();
-                
-                // PRE-FIX: This injects a base tag so Openfront's scripts load from its real server
-                // This prevents the "404" errors for JS and CSS files
-                const baseTag = `<base href="${target}">`;
-                
-                if (html.includes('<head>')) {
-                    html = html.replace('<head>', '<head>' + baseTag);
-                } else {
-                    html = baseTag + html;
-                }
+                status.innerText = "Injecting Base Tags...";
 
-                // Inject the HTML into our display area
-                display.innerHTML = html;
+                // This is the "Magic Fix" for Openfront
+                // It tells the iPad to find images/scripts on Openfront's server, not yours.
+                const baseTag = `<base href="https://openfront.io/">`;
+                html = html.replace('<head>', '<head>' + baseTag);
 
-                // Re-execute scripts (since innerHTML doesn't run <script> tags)
-                Array.from(display.querySelectorAll("script")).forEach( oldScript => {
+                surface.innerHTML = html;
+
+                // Manually trigger scripts (Required for interactive sites)
+                const scripts = surface.querySelectorAll("script");
+                scripts.forEach(oldScript => {
                     const newScript = document.createElement("script");
-                    Array.from(oldScript.attributes).forEach( attr => newScript.setAttribute(attr.name, attr.value) );
+                    Array.from(oldScript.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
                     newScript.appendChild(document.createTextNode(oldScript.innerHTML));
                     oldScript.parentNode.replaceChild(newScript, oldScript);
                 });
+
+                status.innerText = "Loaded Successfully";
+
             } catch (err) {
-                display.innerHTML = "<p style='color:red; padding: 20px;'>Error: " + err.message + "</p>";
+                status.innerText = "Failed";
+                log.style.display = "block";
+                log.innerHTML = `<strong>Launch Failed:</strong><br>${err.message}<br><br><em>Tip: Check if your iPad has 'Content Restrictions' on in Settings.</em>`;
             }
         }
     </script>
