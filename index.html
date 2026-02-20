@@ -1,34 +1,58 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>My Research Portal</title>
+    <title>Research Portal</title>
     <style>
-        body { margin: 0; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; background: #1a1a1a; }
-        #nav { background: #333; padding: 10px; display: flex; gap: 10px; border-bottom: 2px solid #444; }
-        input { flex: 1; padding: 10px; border-radius: 5px; border: none; background: #444; color: white; }
-        button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
-        button:hover { background: #0056b3; }
-        #browser { flex: 1; background: white; border: none; width: 100%; }
-        .notice { color: #888; font-size: 12px; padding: 5px; text-align: center; }
+        body { margin: 0; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; background: #121212; color: white; }
+        #nav { background: #1f1f1f; padding: 10px; display: flex; gap: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.5); }
+        input { flex: 1; padding: 10px; border-radius: 4px; border: 1px solid #333; background: #2c2c2c; color: white; outline: none; }
+        button { padding: 10px 20px; background: #4285f4; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        button:hover { background: #357ae8; }
+        #container { flex: 1; background: white; border: none; overflow: auto; color: black; }
     </style>
 </head>
 <body>
     <div id="nav">
-        <input type="text" id="urlInput" placeholder="Enter URL (e.g., https://wikipedia.org)">
+        <input type="text" id="urlInput" placeholder="Enter URL (e.g. https://wikipedia.org)">
         <button onclick="loadSite()">Go</button>
     </div>
-    <div class="notice">Note: If the site doesn't load, you may need to visit <a href="https://cors-anywhere.herokuapp.com/corsdemo" target="_blank" style="color:#007bff">this link</a> and click "Request temporary access".</div>
-    <iframe id="browser"></iframe>
+    <div id="container">
+        <div style="padding: 20px; color: #666;">Site will load here...</div>
+    </div>
 
     <script>
-        function loadSite() {
+        async function loadSite() {
             const url = document.getElementById('urlInput').value;
-            const proxy = "https://cors-anywhere.herokuapp.com/";
-            const iframe = document.getElementById('browser');
+            const container = document.getElementById('container');
             
-            // We use the proxy to fetch the content
-            // Note: Direct iframe loading often gets blocked, so this is a basic version
-            iframe.src = proxy + url;
+            if (!url) return;
+            container.innerHTML = "<div style='padding:20px;'>Loading through proxy...</div>";
+
+            try {
+                // Using AllOrigins to bypass CORS without special headers
+                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+                const response = await fetch(proxyUrl);
+                const data = await response.json();
+                
+                // Inject the content
+                let html = data.contents;
+                
+                // Fix relative links (images/CSS)
+                const baseTag = `<base href="${url}">`;
+                container.innerHTML = baseTag + html;
+
+                // Hijack links so they stay inside your proxy
+                const links = container.getElementsByTagName('a');
+                for (let link of links) {
+                    link.onclick = function(e) {
+                        e.preventDefault();
+                        document.getElementById('urlInput').value = this.href;
+                        loadSite();
+                    };
+                }
+            } catch (err) {
+                container.innerHTML = "<div style='padding:20px; color:red;'>Error: " + err + "</div>";
+            }
         }
     </script>
 </body>
