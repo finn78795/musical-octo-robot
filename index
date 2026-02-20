@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>My Research Portal</title>
+    <style>
+        body { margin: 0; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; background: #1a1a1a; }
+        #nav { background: #333; padding: 10px; display: flex; gap: 10px; border-bottom: 2px solid #444; }
+        input { flex: 1; padding: 10px; border-radius: 5px; border: none; background: #444; color: white; }
+        button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        #browser { flex: 1; background: white; border: none; width: 100%; }
+        .notice { color: #888; font-size: 12px; padding: 5px; text-align: center; }
+    </style>
+</head>
+<body>
+    <div id="nav">
+        <input type="text" id="urlInput" placeholder="Enter URL (e.g., https://wikipedia.org)">
+        <button onclick="loadSite()">Go</button>
+    </div>
+    <div class="notice">Note: If the site doesn't load, you may need to visit <a href="https://cors-anywhere.herokuapp.com/corsdemo" target="_blank" style="color:#007bff">this link</a> and click "Request temporary access".</div>
+    <iframe id="browser"></iframe>
+
+    <script>
+        function loadSite() {
+            const url = document.getElementById('urlInput').value;
+            const proxy = "https://cors-anywhere.herokuapp.com/";
+            const iframe = document.getElementById('browser');
+            
+            // We use the proxy to fetch the content
+            // Note: Direct iframe loading often gets blocked, so this is a basic version
+            iframe.src = proxy + url;
+        }
+    </script>
+</body>
+</html>
