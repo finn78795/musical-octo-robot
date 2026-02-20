@@ -3,15 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Openfront Gateway</title>
+    <title>Gateway Console</title>
     <style>
-        body { margin: 0; background: #000; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; color: #fff; }
-        #nav { padding: 10px; background: #111; display: flex; gap: 10px; border-bottom: 2px solid #333; }
-        input { flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #444; background: #222; color: #fff; outline: none; }
-        button { padding: 10px 20px; background: #2563eb; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
-        #status { font-size: 12px; color: #888; padding: 5px 15px; }
-        #view-container { flex: 1; position: relative; background: #fff; overflow: auto; }
-        #error-log { color: #ff4d4d; padding: 20px; display: none; }
+        body { margin: 0; background: #000; font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; height: 100vh; color: #fff; }
+        #nav { padding: 12px; background: #111; display: flex; gap: 10px; border-bottom: 2px solid #333; align-items: center; }
+        input { flex: 1; padding: 10px; border-radius: 6px; border: 1px solid #444; background: #222; color: #fff; outline: none; font-size: 14px; }
+        button { padding: 10px 18px; background: #2563eb; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        button:hover { background: #1d4ed8; }
+        #status-bar { font-size: 11px; color: #888; padding: 4px 15px; background: #0a0a0a; display: flex; justify-content: space-between; }
+        #view-container { flex: 1; background: #fff; overflow: auto; position: relative; }
+        #loader { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #000; display: none; }
     </style>
 </head>
 <body>
@@ -19,60 +20,80 @@
         <input type="text" id="targetUrl" value="https://openfront.io/">
         <button onclick="launch()">Launch</button>
     </div>
-    <div id="status">Ready</div>
+    <div id="status-bar">
+        <span id="stat-text">System Ready</span>
+        <span id="bridge-name">Bridge: Auto</span>
+    </div>
     <div id="view-container">
-        <div id="error-log"></div>
+        <div id="loader">Loading Assets...</div>
         <div id="view-surface"></div>
     </div>
 
     <script>
+        // These are "Developer-Grade" bridges that are harder for schools to block
+        const bridges = [
+            "https://api.codetabs.com/v1/proxy?quest=",
+            "https://corsproxy.io/?",
+            "https://proxy.corsfix.com/?",
+            "https://thingproxy.freeboard.io/fetch/"
+        ];
+
+        let currentBridgeIndex = 0;
+
         async function launch() {
-            const input = document.getElementById('targetUrl').value;
-            const log = document.getElementById('error-log');
+            const url = document.getElementById('targetUrl').value;
             const surface = document.getElementById('view-surface');
-            const status = document.getElementById('status');
+            const stat = document.getElementById('stat-text');
+            const loader = document.getElementById('loader');
             
-            status.innerText = "Connecting...";
-            log.style.display = "none";
+            loader.style.display = "block";
             surface.innerHTML = "";
+            stat.innerText = "Attempting connection...";
 
-            // Alternate Bridges: If one fails, you can swap it here.
-            // 1. https://corsproxy.io/?
-            // 2. https://api.codetabs.com/v1/proxy?quest=
-            const bridge = "https://corsproxy.io/?";
-            const proxyUrl = bridge + encodeURIComponent(input);
-
-            try {
-                const response = await fetch(proxyUrl);
+            // Try bridges one by one if they fail
+            for (let i = 0; i < bridges.length; i++) {
+                const currentBridge = bridges[i];
+                document.getElementById('bridge-name').innerText = `Bridge: ${i + 1}`;
                 
-                if (!response.ok) throw new Error(`Bridge Error: ${response.status}`);
-                
-                let html = await response.text();
-                status.innerText = "Injecting Base Tags...";
+                try {
+                    const response = await fetch(currentBridge + encodeURIComponent(url));
+                    if (!response.ok) throw new Error("Offline");
 
-                // This is the "Magic Fix" for Openfront
-                // It tells the iPad to find images/scripts on Openfront's server, not yours.
-                const baseTag = `<base href="https://openfront.io/">`;
-                html = html.replace('<head>', '<head>' + baseTag);
+                    let html = await response.text();
+                    
+                    // PRE-FIX: Force Openfront to look at its own servers for JS/CSS
+                    const baseTag = `<base href="${url}${url.endsWith('/') ? '' : '/'}">`;
+                    html = html.replace('<head>', '<head>' + baseTag);
 
-                surface.innerHTML = html;
+                    // Injecting the content
+                    surface.innerHTML = html;
 
-                // Manually trigger scripts (Required for interactive sites)
-                const scripts = surface.querySelectorAll("script");
-                scripts.forEach(oldScript => {
-                    const newScript = document.createElement("script");
-                    Array.from(oldScript.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
-                    newScript.appendChild(document.createTextNode(oldScript.innerHTML));
-                    oldScript.parentNode.replaceChild(newScript, oldScript);
-                });
+                    // SCRIPT RE-HYDRATION: Necessary for .io games
+                    const scripts = surface.querySelectorAll("script");
+                    scripts.forEach(oldScript => {
+                        const newScript = document.createElement("script");
+                        Array.from(oldScript.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
+                        if (oldScript.src) {
+                            // If the script is external, ensure it's proxied too
+                            newScript.src = currentBridge + encodeURIComponent(oldScript.src);
+                        } else {
+                            newScript.appendChild(document.createTextNode(oldScript.innerHTML));
+                        }
+                        oldScript.parentNode.replaceChild(newScript, oldScript);
+                    });
 
-                status.innerText = "Loaded Successfully";
+                    stat.innerText = "Injection Successful";
+                    loader.style.display = "none";
+                    return; // Stop if successful
 
-            } catch (err) {
-                status.innerText = "Failed";
-                log.style.display = "block";
-                log.innerHTML = `<strong>Launch Failed:</strong><br>${err.message}<br><br><em>Tip: Check if your iPad has 'Content Restrictions' on in Settings.</em>`;
+                } catch (e) {
+                    console.log(`Bridge ${i} failed, trying next...`);
+                    stat.innerText = `Bridge ${i+1} blocked, retrying...`;
+                }
             }
+
+            stat.innerText = "All bridges failed. Use the 'Canva Cloak'.";
+            loader.style.display = "none";
         }
     </script>
 </body>
